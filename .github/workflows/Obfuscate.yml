@@ -5,6 +5,7 @@ on:
     branches:
       - main
   schedule:
+    # 每天凌晨1:00运行
     - cron: "0 1 * * *"
 
 permissions:
@@ -21,23 +22,16 @@ jobs:
       - name: 设置 Node.js 环境
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "latest"
 
       - name: 安装依赖项
         run: |
-          npm install -g javascript-obfuscator uglify-js
+          npm install -g javascript-obfuscator
 
       - name: 下载 BPB worker.js
         run: |
           wget -O origin.js https://raw.githubusercontent.com/orangetect/BPB-Worker-Panel/refs/heads/main/src/worker.js
-
-      - name: 检查下载成功
-        run: |
-          if [ ! -s origin.js ]; then
-            echo "❌ 下载失败：origin.js 文件为空或不存在！"
-            exit 1
-          fi
-
+      
       - name: 混淆 BPB worker.js
         run: |
           javascript-obfuscator origin.js --output _worker.js \
@@ -52,46 +46,10 @@ jobs:
             --transform-object-keys true \
             --unicode-escape-sequence true
 
-      - name: 检查混淆是否成功
-        run: |
-          if [ ! -s _worker.js ]; then
-            echo "❌ 混淆失败：_worker.js 文件为空或不存在！"
-            exit 1
-          fi
-
-      - name: 使用 UglifyJS 压缩 _worker.js
-        run: |
-          uglifyjs _worker.js --compress --mangle --output _worker.js
-
-      - name: 比较新旧文件是否有变化
-        id: check_diff
-        run: |
-          git fetch origin main
-          if git diff --quiet _worker.js; then
-            echo "no_changes=true" >> $GITHUB_ENV
-          else
-            echo "no_changes=false" >> $GITHUB_ENV
-          fi
-
       - name: 提交更改
-        if: env.no_changes == 'false'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           branch: main
           commit_message: ':arrow_up: 更新最新的 BPB 面板'
           commit_author: 'github-actions[bot] <github-actions[bot]@users.noreply.github.com>'
-
-      - name: 清理临时文件
-        run: |
-          rm -f origin.js
-
-  notify:
-    needs: build
-    if: failure()
-    runs-on: ubuntu-latest
-    steps:
-      - name: 发送失败通知到 Telegram
-        run: |
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-          -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-          -d text="❌ BPB 面板构建失败！请立即检查 GitHub Actions 日志！"
+          push_options: '--set-upstream'
