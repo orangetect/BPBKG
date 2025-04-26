@@ -7,25 +7,39 @@ import { logout } from './authentication/auth';
 export default {
 	async fetch(request, env) {
 		try {
-			initializeParams(request, env);
-			const { pathName } = globalThis;
-			const upgradeHeader = request.headers.get('Upgrade');
-			if (!upgradeHeader || upgradeHeader !== 'websocket') {
-				if (pathName.startsWith('/panel')) return await handlePanel(request, env);
-				if (pathName.startsWith('/sub')) return await handleSubscriptions(request, env);
-				if (pathName.startsWith('/login')) return await handleLogin(request, env);
-				if (pathName.startsWith('/logout')) return await logout(request, env);
-				if (pathName.startsWith('/error')) return await renderError();
-				if (pathName.startsWith('/secrets')) return await renderSecrets();
-				if (pathName.startsWith('/favicon.ico')) return await serveIcon();
+			const { pathName, urlOrigin } = initializeParams(request, env);
+			const isWebSocket = request.headers.get('Upgrade')?.toLowerCase() === 'websocket';
+
+			if (!isWebSocket) {
+				const routes = {
+					'/panel': handlePanel,
+					'/sub': handleSubscriptions,
+					'/login': handleLogin,
+					'/logout': logout,
+					'/error': renderError,
+					'/secrets': renderSecrets,
+					'/favicon.ico': serveIcon,
+				};
+
+				for (const route in routes) {
+					if (pathName.startsWith(route)) {
+						return await routes[route](request, env);
+					}
+				}
+
+				// Default fallback if no routes matched
 				return await fallback(request);
 			} else {
-				return pathName.startsWith('/tr')
-					? await TROverWSHandler(request)
-					: await VLOverWSHandler(request);
+				// WebSocket upgrade handling
+				if (pathName.startsWith('/tr')) {
+					return await TROverWSHandler(request);
+				} else {
+					return await VLOverWSHandler(request);
+				}
 			}
 		} catch (error) {
-			return Response.redirect(`${globalThis.urlOrigin}/error?error=${error.toString()}`, 302);
+			// Redirect to /error with encoded error message
+			return Response.redirect(`${urlOrigin}/error?error=${encodeURIComponent(error.toString())}`, 302);
 		}
 	}
 };
