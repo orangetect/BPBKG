@@ -5,7 +5,6 @@ on:
     branches:
       - main
   schedule:
-    # 每天凌晨1:00运行
     - cron: "0 1 * * *"
 
 permissions:
@@ -46,9 +45,41 @@ jobs:
             --transform-object-keys true \
             --unicode-escape-sequence true
 
+      - name: 生成 Changelog
+        run: |
+          echo "# 更新日志" > CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "## ${{ env.VERSION }}" >> CHANGELOG.md
+          echo "- 自动发布的新版本" >> CHANGELOG.md
+          echo "- 更新时间：$(date '+%Y-%m-%d %H:%M')" >> CHANGELOG.md
+
       - name: 提交更改
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           branch: main
-          commit_message: ':arrow_up: 更新最新的 BPB 面板'
+          commit_message: ':arrow_up: 更新最新的 BPB 面板并更新 Changelog'
           commit_author: 'github-actions[bot] <github-actions[bot]@users.noreply.github.com>'
+          file_pattern: '_worker.js CHANGELOG.md'
+
+      - name: 创建 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION }}
+          name: Release ${{ env.VERSION }}
+          body: |
+            🚀 自动发布的新版本！
+            - 时间: ${{ env.VERSION }}
+            - 文件: _worker.js
+          files: |
+            _worker.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: 部署到 Cloudflare Worker
+        run: |
+          wrangler login --api-token ${{ secrets.CF_API_TOKEN }}
+          wrangler publish --name ${{ secrets.CF_WORKER_NAME }} --env production
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+
