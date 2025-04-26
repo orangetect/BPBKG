@@ -5,7 +5,6 @@ on:
     branches:
       - main
   schedule:
-    # 每天凌晨1:00运行
     - cron: "0 1 * * *"
 
 permissions:
@@ -39,12 +38,7 @@ jobs:
             --control-flow-flattening false \
             --dead-code-injection false \
             --identifier-names-generator mangled \
-            --rename-globals false \
-            --string-array true \
-            --string-array-encoding 'rc4' \
-            --string-array-threshold 0.75 \
-            --transform-object-keys true \
-            --unicode-escape-sequence true
+            --rename-globals false
 
       - name: 提交更改
         uses: stefanzweifel/git-auto-commit-action@v5
