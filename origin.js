@@ -1,8 +1,8 @@
-import { initializeParams } from './helpers/init.js';
-import { VLOverWSHandler } from './protocols/vless.js';
-import { TROverWSHandler } from './protocols/trojan.js';
-import { fallback, serveIcon, renderError, renderSecrets, handlePanel, handleSubscriptions, handleLogin } from './helpers/helpers.js';
-import { logout } from './authentication/auth.js';
+import { initializeParams } from './helpers/init';
+import { VLOverWSHandler } from './protocols/vless';
+import { TROverWSHandler } from './protocols/trojan';
+import { fallback, serveIcon, renderError, renderSecrets, handlePanel, handleSubscriptions, handleLogin } from './helpers/helpers';
+import { logout } from './authentication/auth';
 
 export default {
 	async fetch(request, env) {
