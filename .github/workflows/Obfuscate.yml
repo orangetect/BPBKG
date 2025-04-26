@@ -22,7 +22,7 @@ jobs:
       - name: 设置 Node.js 环境
         uses: actions/setup-node@v4
         with:
-          node-version: "latest"
+          node-version: "20"  # 使用稳定的 LTS 版本
 
       - name: 安装依赖项
         run: |
@@ -30,7 +30,7 @@ jobs:
 
       - name: 下载 BPB worker.js
         run: |
-          wget -O origin.js https://raw.githubusercontent.com/bia-pain-bache/BPB-Worker-Panel/refs/heads/main/src/worker.js
+          wget -O origin.js https://raw.githubusercontent.com/bia-pain-bache/BPB-Worker-Panel/main/src/worker.js
 
       - name: 混淆 BPB worker.js
         run: |
@@ -44,7 +44,8 @@ jobs:
             --string-array-encoding 'rc4' \
             --string-array-threshold 0.75 \
             --transform-object-keys true \
-            --unicode-escape-sequence true
+            --unicode-escape-sequence true \
+            --source-map true  # 生成 source map
 
       - name: 提交更改
         uses: stefanzweifel/git-auto-commit-action@v5
@@ -53,3 +54,11 @@ jobs:
           commit_message: ':arrow_up: 更新最新的 BPB 面板'
           commit_author: 'github-actions[bot] <github-actions[bot]@users.noreply.github.com>'
           push_options: '--set-upstream'
+          file_pattern: '_worker.js'  # 限制提交仅 _worker.js
+
+      - name: 发送失败通知到 Telegram
+        if: failure()  # 如果构建失败才执行
+        run: |
+          curl -s -X POST https://api.telegram.org/bot$YOUR_BOT_TOKEN/sendMessage \
+            -d chat_id=$YOUR_CHAT_ID \
+            -d text="构建失败！请查看错误日志：$(github.workflow_run.html_url)"
