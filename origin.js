@@ -10,7 +10,7 @@ import {
   handleSubscriptions, 
   handleLogin 
 } from './helpers/helpers.js';
-import { logout } from './src/authentication/auth.js';
+import { logout } from './authentication/auth.js';
 
 const routeHandlers = {
   '/panel': handlePanel,
