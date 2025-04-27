@@ -1,6 +1,2 @@
-name = "BPBKG"
-type = "javascript"  # 或根据需要选择其他类型（例如 rust, wasm）
-
-account_id = "ide381b0a6ddbba0e99506e3e6881ee197"
-workers_dev = true
-compatibility_date = "2025-04-27"
+# wrangler.toml
+name = 'alyun'
