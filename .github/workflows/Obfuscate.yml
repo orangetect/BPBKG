@@ -1,31 +1,30 @@
-name: Build and Obfuscate BPB Panel
+name: Build, Obfuscate, and Upload BPB Worker.js to Cloudflare
 
 on:
-  push:
-    branches:
-      - main
   schedule:
-    # 每天凌晨1:00运行
+    # 每天凌晨1:00触发
     - cron: "0 1 * * *"
 
 permissions:
   contents: write
+  id-token: write # 必须授予 ID token 权限，以便与 Cloudflare API 进行身份验证
 
 jobs:
-  build:
+  build-and-upload:
     runs-on: ubuntu-latest
 
     steps:
-      # 缓存 Node.js 依赖
+      # 检出代码
       - name: 检出代码
         uses: actions/checkout@v4
 
+      # 设置 Node.js 环境
       - name: 设置 Node.js 环境
         uses: actions/setup-node@v4
         with:
           node-version: "latest"
 
-      # 使用缓存加速依赖安装
+      # 缓存 Node.js 依赖
       - name: 缓存 Node.js 依赖
         uses: actions/cache@v3
         with:
@@ -34,15 +33,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-modules-
 
+      # 安装 JavaScript 混淆工具
       - name: 安装依赖项
         run: |
           npm install -g javascript-obfuscator
 
-      # 如果worker.js文件已经存在，可跳过下载步骤
+      # 下载 BPB worker.js 文件
       - name: 下载 BPB worker.js
         run: |
-          wget -O origin.js https://raw.githubusercontent.com/orangetect/BPB-Worker-Panel/refs/heads/main/src/worker.js
+          wget -O origin.js https://raw.githubusercontent.com/bia-pain-bache/BPB-Worker-Panel/refs/heads/main/src/worker.js
 
+      # 混淆 BPB worker.js 文件
       - name: 混淆 BPB worker.js
         run: |
           javascript-obfuscator origin.js --output _worker.js \
@@ -57,11 +58,29 @@ jobs:
             --transform-object-keys true \
             --unicode-escape-sequence true
 
-      # 提交混淆后的文件
-      - name: 提交更改
+      # 设置 Cloudflare API 认证（假设你已配置了 Cloudflare Token 和 Zone ID）
+      - name: Cloudflare Authentication
+        run: |
+          echo "CLOUDFLARE_EMAIL=${{ secrets.CLOUDFLARE_EMAIL }}" >> $GITHUB_ENV
+          echo "CLOUDFLARE_API_KEY=${{ secrets.CLOUDFLARE_API_KEY }}" >> $GITHUB_ENV
+          echo "CLOUDFLARE_ZONE_ID=${{ secrets.CLOUDFLARE_ZONE_ID }}" >> $GITHUB_ENV
+
+      # 上传混淆后的 worker.js 到 Cloudflare
+      - name: 上传到 Cloudflare
+        run: |
+          curl -X PUT "https://api.cloudflare.com/client/v4/zones/${{ secrets.CLOUDFLARE_ZONE_ID }}/workers/scripts/worker.js" \
+          -H "Authorization: Bearer $CLOUDFLARE_API_KEY" \
+          -H "Content-Type: application/javascript" \
+          --data-binary @./_worker.js
+        env:
+          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+
+      # 提交混淆后的文件到 GitHub
+      - name: 提交混淆后的 worker.js 文件
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           branch: main
-          commit_message: ':arrow_up: 更新最新的 BPB 面板'
+          commit_message: ':arrow_up: 更新 BPB worker.js 文件并上传至 Cloudflare'
           commit_author: 'github-actions[bot] <github-actions[bot]@users.noreply.github.com>'
           push_options: '--set-upstream'
