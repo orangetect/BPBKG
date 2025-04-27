@@ -1,55 +1,31 @@
-import { initializeParams } from './helpers/init.js';
-import { VLOverWSHandler } from './protocols/vless.js';
-import { TROverWSHandler } from './protocols/trojan.js';
-import { 
-  fallback, 
-  serveIcon, 
-  renderError, 
-  renderSecrets, 
-  handlePanel, 
-  handleSubscriptions, 
-  handleLogin 
-} from './helpers/helpers.js';
-import { logout } from './authentication/auth.js';
-
-const routeHandlers = {
-  '/panel': handlePanel,
-  '/sub': handleSubscriptions,
-  '/login': handleLogin,
-  '/logout': logout,
-  '/error': renderError,
-  '/secrets': renderSecrets,
-  '/favicon.ico': serveIcon
-};
+import { initializeParams } from './src/helpers/init.js';
+import { VLOverWSHandler } from './src/protocols/vless.js';
+import { TROverWSHandler } from './src/protocols/trojan.js';
+import { fallback, serveIcon, renderError, renderSecrets, handlePanel, handleSubscriptions, handleLogin } from './src/helpers/helpers.js';
+import { logout } from './src/authentication/auth.js';
 
 export default {
-  async fetch(request, env) {
-    try {
-      // 初始化参数
-      initializeParams(request, env);
-      const { pathName } = globalThis;
-      const upgradeHeader = request.headers.get('Upgrade');
-      
-      // 处理WebSocket请求
-      if (upgradeHeader === 'websocket') {
-        return pathName.startsWith('/tr')
-          ? await TROverWSHandler(request)
-          : await VLOverWSHandler(request);
-      }
-
-      // 处理常规路径请求
-      for (const [route, handler] of Object.entries(routeHandlers)) {
-        if (pathName.startsWith(route)) {
-          return await handler(request, env);
-        }
-      }
-
-      // 默认处理
-      return await fallback(request);
-
-    } catch (error) {
-      console.error('Error in fetch:', error);
-      return Response.redirect(`${globalThis.urlOrigin}/error?error=${encodeURIComponent(error.toString())}`, 302);
-    }
-  }
+	async fetch(request, env) {
+		try {
+			initializeParams(request, env);
+			const { pathName } = globalThis;
+			const upgradeHeader = request.headers.get('Upgrade');
+			if (!upgradeHeader || upgradeHeader !== 'websocket') {
+				if (pathName.startsWith('/panel')) return await handlePanel(request, env);
+				if (pathName.startsWith('/sub')) return await handleSubscriptions(request, env);
+				if (pathName.startsWith('/login')) return await handleLogin(request, env);
+				if (pathName.startsWith('/logout')) return await logout(request, env);
+				if (pathName.startsWith('/error')) return await renderError();
+				if (pathName.startsWith('/secrets')) return await renderSecrets();
+				if (pathName.startsWith('/favicon.ico')) return await serveIcon();
+				return await fallback(request);
+			} else {
+				return pathName.startsWith('/tr')
+					? await TROverWSHandler(request)
+					: await VLOverWSHandler(request);
+			}
+		} catch (error) {
+			return Response.redirect(`${globalThis.urlOrigin}/error?error=${error.toString()}`, 302);
+		}
+	}
 };
