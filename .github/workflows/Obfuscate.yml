@@ -1,67 +1,86 @@
-name: Build and Obfuscate BPB Panel
+name: Auto Update Worker
 
 on:
   push:
     branches:
       - main
   schedule:
-    # 每天凌晨1:00运行
-    - cron: "0 1 * * *"
+    - cron: "0 1 * * *" # 每天凌晨1点自动运行
+  workflow_dispatch:     # 支持手动运行
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  update:
     runs-on: ubuntu-latest
 
     steps:
-      # 缓存 Node.js 依赖
-      - name: 检出代码
+      - name: 初始化仓库
         uses: actions/checkout@v4
 
-      - name: 设置 Node.js 环境
-        uses: actions/setup-node@v4
-        with:
-          node-version: "latest"
-
-      # 使用缓存加速依赖安装
-      - name: 缓存 Node.js 依赖
-        uses: actions/cache@v3
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-modules-
-
-      - name: 安装依赖项
+      - name: 获取当前本地版本
+        id: get_local_version
         run: |
-          npm install -g javascript-obfuscator
+          echo "::group::获取本地版本"
+          LOCAL_VERSION=""
+          if [ -f version.txt ]; then
+            LOCAL_VERSION=$(cat version.txt)
+            echo "当前本地版本: $LOCAL_VERSION"
+          else
+            echo "首次运行，无本地版本。"
+          fi
+          echo "LOCAL_VERSION=$LOCAL_VERSION" >> $GITHUB_ENV
+          echo "::endgroup::"
 
-      # 如果worker.js文件已经存在，可跳过下载步骤
-      - name: 下载 BPB worker.js
+      - name: 获取最新 Release 信息
+        id: get_release
         run: |
-          wget -O origin.js https://raw.githubusercontent.com/orangetect/BPB-Worker-Panel/refs/heads/main/src/worker.js
+          echo "::group::获取最新 Release"
+          API_URL="https://api.github.com/repos/bia-pain-bache/BPB-Worker-Panel/releases/latest"
+          RESPONSE=$(curl -s "$API_URL")
 
-      - name: 混淆 BPB worker.js
+          TAG_NAME=$(echo "$RESPONSE" | jq -r '.tag_name')
+          DOWNLOAD_URL=$(echo "$RESPONSE" | jq -r '.assets[] | select(.name == "worker.zip") | .browser_download_url')
+
+          if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" = "null" ]; then
+            echo "未找到 worker.zip，退出。"
+            exit 1
+          fi
+
+          echo "最新版本号: $TAG_NAME"
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+          echo "DOWNLOAD_URL=$DOWNLOAD_URL" >> $GITHUB_ENV
+          echo "::endgroup::"
+
+      - name: 判断是否需要更新
+        id: check_update
         run: |
-          javascript-obfuscator origin.js --output _worker.js \
-            --compact true \
-            --control-flow-flattening false \
-            --dead-code-injection false \
-            --identifier-names-generator mangled \
-            --rename-globals false \
-            --string-array true \
-            --string-array-encoding 'rc4' \
-            --string-array-threshold 0.75 \
-            --transform-object-keys true \
-            --unicode-escape-sequence true
+          echo "::group::判断是否更新"
+          if [ "$LOCAL_VERSION" = "$TAG_NAME" ]; then
+            echo "当前已是最新版本。"
+            echo "UPDATE_NEEDED=false" >> $GITHUB_ENV
+          else
+            echo "检测到新版本，需要更新！"
+            echo "UPDATE_NEEDED=true" >> $GITHUB_ENV
+          fi
+          echo "::endgroup::"
 
-      # 提交混淆后的文件
-      - name: 提交更改
+      - name: 更新文件内容
+        if: env.UPDATE_NEEDED == 'true'
+        run: |
+          echo "::group::清理并更新文件"
+          rm -rf ./*
+          wget -O worker.zip "$DOWNLOAD_URL"
+          unzip worker.zip
+          rm worker.zip
+          echo "$TAG_NAME" > version.txt
+          echo "::endgroup::"
+
+      - name: 提交更新
+        if: env.UPDATE_NEEDED == 'true'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          branch: main
-          commit_message: ':arrow_up: 更新最新的 BPB 面板'
-          commit_author: 'github-actions[bot] <github-actions[bot]@users.noreply.github.com>'
-          push_options: '--set-upstream'
+          commit_message: "🔄 自动同步最新 Worker 版本：${{ env.TAG_NAME }}"
+          commit_author: "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+          push_options: --force
